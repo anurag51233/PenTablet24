@@ -1,0 +1,115 @@
+from machine import Pin
+import time
+from machine import ADC
+import math
+led = Pin(25, Pin.OUT)
+
+#-----Configuration-----
+#enable mux 1
+muxEN1 = Pin(14, Pin.OUT)
+muxEN2 = Pin(15, Pin.OUT)
+
+#upper half mux 
+muxBit0 = Pin(0, Pin.OUT)
+muxBit1 = Pin(1, Pin.OUT)
+muxBit2 = Pin(2, Pin.OUT)
+muxBit3 = Pin(3, Pin.OUT)
+#lower half mux
+muxBit4 = Pin(4, Pin.OUT)
+muxBit5 = Pin(5, Pin.OUT)
+muxBit6 = Pin(6, Pin.OUT)
+muxBit7 = Pin(7, Pin.OUT)
+
+def set_mux0_bits(binary_input):
+    if len(binary_input) == 4:  # Ensure that input is exactly 4 bits long
+        muxEN1.value(0)
+        muxEN2.value(1)
+        
+        muxBit3.value(int(binary_input[0]))
+        muxBit2.value(int(binary_input[1]))
+        muxBit1.value(int(binary_input[2]))
+        muxBit0.value(int(binary_input[3]))
+
+def set_mux1_bits(binary_input):
+    if len(binary_input) == 4:  # Ensure that input is exactly 4 bits long
+        muxEN1.value(1)
+        muxEN2.value(0)
+        
+        muxBit7.value(int(binary_input[0]))
+        muxBit6.value(int(binary_input[1]))
+        muxBit5.value(int(binary_input[2]))
+        muxBit4.value(int(binary_input[3]))
+
+def set_mux_bits_from_int(number):
+    if 0 <= number <= 15:  # Ensure that input is a 4-bit integer (0 to 15)
+        binary_input = bin(number)[2:]  # Convert to binary and remove '0b' prefix
+        while len(binary_input) < 4:    # Manually pad with zeros if less than 4 bits
+            binary_input = '0' + binary_input
+
+        set_mux0_bits(binary_input)
+    else:
+        number = number - 16
+        binary_input = bin(number)[2:]  # Convert to binary and remove '0b' prefix
+        while len(binary_input) < 4:    # Manually pad with zeros if less than 4 bits
+            binary_input = '0' + binary_input
+
+        set_mux1_bits(binary_input)
+        
+
+#set_mux0_bits("1111")
+set_mux_bits_from_int(5)
+
+#Read Pin
+adc = ADC(26)
+
+
+
+err_readings_list = []
+readings_list = []
+
+for i in range(24):
+        set_mux_bits_from_int(i)
+        reading = adc.read_u16()
+        err_readings_list.append(reading)
+        
+
+def read_adc(samples=50):
+    total = 0
+    for _ in range(samples):
+        total += adc.read_u16()  # Take a reading (12-bit resolution, scaled to 16-bit)
+        time.sleep_us(10)  # Small delay between readings to avoid high-speed noise
+    average = total // samples  # Compute the average value
+    return average
+
+
+count = 24      
+while True:
+    led.value(0)
+    for i in range(24):
+        set_mux_bits_from_int(i)
+        reading = read_adc(samples=70)
+        
+        
+        corrected_reading = reading-err_readings_list[i]
+        if(corrected_reading <250):
+            corrected_reading = 0
+            count = count - 1
+            
+        if(corrected_reading != 0 and corrected_reading > 0 ):
+            corrected_reading = 400/(math.sqrt(corrected_reading))
+        
+        readings_list.append(corrected_reading)
+        
+         
+    if(count >= 3):
+        print(readings_list)
+        led.value(1)
+        
+    #clear attributes
+    count = 24
+    readings_list.clear()
+    
+    
+    
+    #time.sleep_ms(10)
+    
